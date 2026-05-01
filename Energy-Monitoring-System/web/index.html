@@ -486,11 +486,6 @@
   </div>
 </main>
 
-<!--
-  FIX 1: Load Firebase scripts as regular blocking scripts (no defer/async).
-          They must be fully parsed before any app code runs.
-  FIX 2: Auth compat SDK added so signInAnonymously() is available.
--->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -498,9 +493,8 @@
 <script>
   /* ─── Config ─── */
   const FIREBASE_CONFIG = {
-    apiKey:      "",
-    databaseURL: "",
-    // FIX 3: authDomain is required for Auth to initialise correctly
+    apiKey:      "AIzaSyCRmRyXQjNDPPTSjPjCTQcanGm183rW9dw",
+    databaseURL: "https://energy-monitoring-and-safety-default-rtdb.asia-southeast1.firebasedatabase.app",
     authDomain:  "energy-monitoring-and-safety.firebaseapp.com",
   };
 
@@ -571,17 +565,7 @@
     document.getElementById('connLabel').textContent = label;
   }
 
-  /* ─── Init ─────────────────────────────────────────────────────────────
-   *
-   *  FIX 4: Scripts are now at the bottom of <body>, so the DOM is already
-   *          ready when this code runs — no DOMContentLoaded wrapper needed.
-   *
-   *  FIX 5: Anonymous sign-in is performed BEFORE attaching DB listeners.
-   *          Firebase RTDB rules that require auth=true will now accept the
-   *          connection.  If your rules allow unauthenticated reads/writes
-   *          this is still harmless and good practice.
-   *
-   * ────────────────────────────────────────────────────────────────────── */
+  /* ─── Init ─── */
   (function init() {
     try {
       firebase.initializeApp(FIREBASE_CONFIG);
@@ -593,16 +577,12 @@
 
     const auth = firebase.auth();
 
-    // Sign in anonymously, then start listeners.
-    // If auth is not enabled in the Firebase console the catch() will
-    // still call startListeners() so the DB attempt is made anyway.
     auth.signInAnonymously()
       .then(() => {
         console.log('Anonymous auth OK, uid:', auth.currentUser.uid);
         startListeners();
       })
       .catch(err => {
-        // Auth may be disabled in the console — log but still try the DB.
         console.warn('Anonymous auth failed (rules may still allow access):', err.code, err.message);
         startListeners();
       });
@@ -612,17 +592,13 @@
   function startListeners() {
     const db = firebase.database();
 
-    // Start countdown immediately — handles the case where ESP is
-    // already offline when the page first loads.
     offlineTimer = setTimeout(markOffline, OFFLINE_TIMEOUT_MS);
 
-    // Heartbeat: every fire = ESP is alive → reset the watchdog timer.
     db.ref('Device/heartbeat').on('value', snap => {
       if (snap.val() == null) return;
       markOnline();
     });
 
-    // Device data
     DEVICES.forEach(dev => {
       db.ref(`Device/${dev.key}`).on('value', snap => {
         if (!espOnline) return;
@@ -660,13 +636,13 @@
     vEl.classList.remove('loading');
     aEl.classList.remove('loading');
 
-    vEl.textContent = v.toFixed(1);
-    aEl.textContent = a.toFixed(2);
+    vEl.textContent = v.toFixed(2);   // ← voltage: 2 decimals
+    aEl.textContent = a.toFixed(3);
 
     document.getElementById(`vbar-${n}`).style.width = Math.min(100, (v / V_MAX) * 100).toFixed(1) + '%';
     document.getElementById(`abar-${n}`).style.width = Math.min(100, (a / A_MAX) * 100).toFixed(1) + '%';
 
-    document.getElementById(`p-${n}`).textContent  = pw.toFixed(1) + ' W';
+    document.getElementById(`p-${n}`).textContent  = pw.toFixed(3) + ' W';
     document.getElementById(`ec-${n}`).textContent = isNaN(ec) ? '-- kWh' : ec.toFixed(3) + ' kWh';
 
     const badge = document.getElementById(`em-${n}`);
@@ -728,9 +704,9 @@
       if (document.getElementById(`card-${n}`).classList.contains('em-on')) emCount++;
     }
 
-    document.getElementById('sum-power').textContent = active ? totalPow.toFixed(1) + ' W'          : '0.0 W';
-    document.getElementById('sum-volt').textContent  = active ? (totalV / active).toFixed(1) + ' V' : '0.0 V';
-    document.getElementById('sum-amp').textContent   = active ? (totalA / active).toFixed(2) + ' A' : '0.00 A';
+    document.getElementById('sum-power').textContent = active ? totalPow.toFixed(3) + ' W'          : '0.000 W';
+    document.getElementById('sum-volt').textContent  = active ? (totalV / active).toFixed(2) + ' V' : '0.00 V';   // ← voltage avg: 2 decimals
+    document.getElementById('sum-amp').textContent   = active ? (totalA / active).toFixed(3) + ' A' : '0.000 A';
 
     const emEl = document.getElementById('sum-em');
     emEl.textContent = emCount;
