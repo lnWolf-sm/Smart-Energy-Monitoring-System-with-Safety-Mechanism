@@ -1,689 +1,334 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Energy Monitor — ESP32 Dashboard</title>
-
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;500;600;800&display=swap" rel="stylesheet"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 Energy Dashboard</title>
+  
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
   <style>
     :root {
-      --bg:       #070c12;
-      --panel:    #0c1520;
-      --panel2:   #0f1c2a;
-      --border:   #162436;
-      --accent:   #00d4ff;
-      --amber:    #f0b429;
-      --danger:   #ff3b5c;
-      --safe:     #0dff8c;
-      --text:     #bdd4e4;
-      --muted:    #3d5a72;
-      --font-mono:'Share Tech Mono', monospace;
-      --font-ui:  'Barlow Condensed', sans-serif;
+      --bg-color: #f4f7f6;
+      --card-bg: #ffffff;
+      --text-main: #333333;
+      --text-muted: #777777;
+      --primary: #007bff;
+      --success: #28a745;
+      --danger: #dc3545;
+      --warning: #ffc107;
+      --offline: #6c757d;
     }
-
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font-ui);
-      min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
 
-    body::before {
-      content: '';
-      position: fixed; inset: 0;
-      background-image:
-        linear-gradient(rgba(0,212,255,.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,212,255,.035) 1px, transparent 1px);
-      background-size: 44px 44px;
-      pointer-events: none;
-      z-index: 0;
-    }
+    h1 { margin-bottom: 10px; }
 
-    /* ─── Header ─── */
-    header {
-      position: relative; z-index: 1;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 16px 40px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(12,21,32,.9);
-      backdrop-filter: blur(10px);
-    }
-
-    .logo { display: flex; align-items: center; gap: 14px; }
-
-    .logo-hex {
-      width: 38px; height: 38px;
-      background: var(--accent);
-      clip-path: polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
-      display: grid; place-items: center;
-      font-size: 18px; color: #000;
-      animation: hexPulse 3s ease-in-out infinite;
-    }
-
-    @keyframes hexPulse {
-      0%,100% { filter: drop-shadow(0 0 4px rgba(0,212,255,.4)); }
-      50%      { filter: drop-shadow(0 0 14px rgba(0,212,255,.8)); }
-    }
-
-    .logo-text h1 { font-size: 20px; font-weight: 800; letter-spacing: 4px; color: #fff; }
-    .logo-text p  { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 2px; margin-top: 2px; }
-
-    .header-right { display: flex; align-items: center; gap: 24px; }
-
-    .conn-pill {
-      display: flex; align-items: center; gap: 7px;
-      padding: 5px 13px;
-      border-radius: 20px;
-      font-family: var(--font-mono); font-size: 11px; letter-spacing: 2px;
-      transition: all .4s;
-    }
-
-    .conn-pill.connecting { border: 1px solid rgba(240,180,41,.3); color: var(--amber); }
-    .conn-pill.live { border: 1px solid rgba(13,255,140,.3); color: var(--safe); }
-    .conn-pill.offline { border: 1px solid rgba(255,59,92,.3); color: var(--danger); }
-
-    .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-
-    .conn-pill.live .conn-dot    { animation: blink 1.4s ease-in-out infinite; }
-    .conn-pill.offline .conn-dot { animation: blink .6s ease-in-out infinite; }
-
-    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.15} }
-
-    .clock { font-family: var(--font-mono); font-size: 13px; color: var(--muted); letter-spacing: 2px; }
-
-    /* ─── Main ─── */
-    main {
-      position: relative; z-index: 1;
-      max-width: 1300px; margin: 0 auto;
-      padding: 36px 40px 52px;
-    }
-
-    .section-header {
-      display: flex; justify-content: space-between; align-items: center;
+    /* Status & Alerts */
+    #status-banner {
+      padding: 10px 20px;
+      border-radius: 5px;
+      color: white;
+      font-weight: bold;
       margin-bottom: 20px;
+      background-color: var(--offline);
+      transition: background-color 0.3s;
     }
 
-    .section-tag {
-      font-family: var(--font-mono); font-size: 10px; letter-spacing: 3px;
-      color: var(--muted); text-transform: uppercase;
-    }
-    .section-tag span { color: var(--accent); }
-
-    /* ─── Buttons ─── */
-    .btn-global-clear {
-      background: rgba(255,59,92,.1);
-      border: 1px solid rgba(255,59,92,.4);
-      color: var(--danger);
-      font-family: var(--font-mono);
-      font-size: 11px; font-weight: bold; letter-spacing: 2px;
-      padding: 8px 16px; border-radius: 4px;
-      cursor: pointer; transition: all 0.3s;
-      text-transform: uppercase;
-    }
-    .btn-global-clear:not(:disabled):hover {
-      background: var(--danger);
-      color: #fff;
-      box-shadow: 0 0 15px rgba(255,59,92,.4);
-    }
-    .btn-global-clear:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-      border-color: var(--muted);
-      color: var(--muted);
-      background: transparent;
+    #global-alert {
+      display: none;
+      background-color: var(--danger);
+      color: white;
+      padding: 15px 20px;
+      border-radius: 5px;
+      margin-bottom: 20px;
+      font-weight: bold;
+      width: 100%;
+      max-width: 800px;
+      justify-content: space-between;
+      align-items: center;
+      box-sizing: border-box;
+      animation: flash 1s infinite alternate;
     }
 
-    .btn-toggle {
-      background: rgba(0,0,0,0.3);
-      border: 1px solid var(--border);
-      color: var(--muted);
-      font-family: var(--font-mono); font-size: 10px; font-weight: bold;
-      letter-spacing: 1px; padding: 4px 10px; border-radius: 2px;
-      cursor: pointer; transition: all 0.3s;
+    @keyframes flash {
+      from { opacity: 1; }
+      to { opacity: 0.8; }
     }
-    .btn-toggle.pwr-on {
-      border-color: rgba(13,255,140,.4);
-      color: var(--safe);
-      box-shadow: inset 0 0 10px rgba(13,255,140,.1);
-    }
-    .btn-toggle.pwr-off {
-      border-color: rgba(255,59,92,.4);
-      color: var(--danger);
-      box-shadow: inset 0 0 10px rgba(255,59,92,.1);
-    }
-    .btn-toggle:hover { filter: brightness(1.3); }
 
-    /* ─── Grid & Cards ─── */
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; margin-bottom: 40px; }
+    /* Dashboard Grid */
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      width: 100%;
+      max-width: 900px;
+    }
 
     .card {
-      background: var(--panel); border: 1px solid var(--border);
-      border-radius: 4px; overflow: hidden; position: relative;
-      transition: border-color .35s, box-shadow .35s;
-    }
-    .card::after {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-      background: linear-gradient(90deg, transparent, var(--accent), transparent);
-      opacity: 0; transition: opacity .35s;
-    }
-    .card:hover { border-color: rgba(0,212,255,.3); }
-    .card:hover::after { opacity: 1; }
-
-    .card.em-on {
-      border-color: rgba(255,59,92,.55) !important;
-      box-shadow: 0 0 32px rgba(255,59,92,.18), inset 0 0 40px rgba(255,59,92,.05);
-      animation: emPulse 1.6s ease-in-out infinite;
-    }
-    .card.em-on::after { background: linear-gradient(90deg, transparent, var(--danger), transparent); opacity: 1; }
-
-    @keyframes emPulse {
-      0%,100% { box-shadow: 0 0 20px rgba(255,59,92,.15), inset 0 0 30px rgba(255,59,92,.04); }
-      50%      { box-shadow: 0 0 45px rgba(255,59,92,.3),  inset 0 0 50px rgba(255,59,92,.08); }
+      background-color: var(--card-bg);
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      text-align: center;
+      transition: transform 0.2s, border 0.2s;
+      border: 2px solid transparent;
     }
 
-    .card-head {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 15px 20px; background: rgba(0,0,0,.25); border-bottom: 1px solid var(--border);
+    .card.emergency {
+      border-color: var(--danger);
+      box-shadow: 0 0 15px rgba(220, 53, 69, 0.5);
     }
 
-    .device-id { display: flex; align-items: center; gap: 10px; }
+    .card h3 { margin-top: 0; color: var(--primary); }
 
-    .dev-tag {
-      font-family: var(--font-mono); font-size: 10px; color: var(--accent);
-      letter-spacing: 2px; background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.2);
-      padding: 2px 8px; border-radius: 2px;
+    .readings p {
+      font-size: 1.1em;
+      margin: 10px 0;
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 5px;
     }
 
-    .dev-name { font-size: 18px; font-weight: 800; letter-spacing: 2px; color: #e5f2ff; text-transform: uppercase; }
+    .readings span { font-weight: bold; }
 
-    .status-group { display: flex; align-items: center; gap: 10px; }
-
-    .em-badge {
-      display: flex; align-items: center; gap: 6px;
-      padding: 4px 10px; border-radius: 2px;
-      font-family: var(--font-mono); font-size: 10px; font-weight: 700;
-      letter-spacing: 2px; text-transform: uppercase; transition: all .4s;
+    /* Buttons */
+    button {
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      font-size: 1em;
+      cursor: pointer;
+      font-weight: bold;
+      transition: opacity 0.2s;
+      margin-top: 15px;
+      width: 100%;
     }
-    .em-badge.off { background: rgba(13,255,140,.07); border: 1px solid rgba(13,255,140,.2); color: var(--safe); }
-    .em-badge.on {
-      background: rgba(255,59,92,.12); border: 1px solid rgba(255,59,92,.6); color: var(--danger);
-      animation: badgeFlash 1s ease-in-out infinite;
-    }
 
-    @keyframes badgeFlash { 0%,100%{opacity:1} 50%{opacity:.5} }
+    button:hover { opacity: 0.8; }
+    button:active { transform: scale(0.98); }
 
-    .em-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .btn-relay { background-color: var(--offline); color: white; }
+    .btn-relay.on { background-color: var(--success); }
+    .btn-cancel { background-color: white; color: var(--danger); border: 1px solid white; width: auto; margin: 0; }
 
-    .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); }
-
-    .metric { background: var(--panel); padding: 26px 22px 20px; display: flex; flex-direction: column; }
-
-    .m-label { font-size: 10px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; margin-bottom: 10px; }
-    .m-value { font-family: var(--font-mono); font-size: 46px; line-height: 1; transition: color .3s; }
-
-    .m-value.v { color: var(--accent); text-shadow: 0 0 20px rgba(0,212,255,.4); }
-    .m-value.a { color: var(--amber); text-shadow: 0 0 20px rgba(240,180,41,.35); }
-    .m-value.loading { color: var(--border) !important; text-shadow: none !important; animation: skeletonPulse 1.4s ease-in-out infinite; }
-
-    @keyframes skeletonPulse { 0%,100%{opacity:.4} 50%{opacity:1} }
-
-    .m-unit { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin-top: 4px; letter-spacing: 1px; }
-
-    .m-bar-track { height: 3px; background: rgba(255,255,255,.06); border-radius: 2px; overflow: hidden; margin-top: 14px; }
-    .m-bar { height: 100%; border-radius: 2px; transition: width .7s cubic-bezier(.4,0,.2,1); }
-    .m-bar.v { background: var(--accent); box-shadow: 0 0 8px rgba(0,212,255,.5); }
-    .m-bar.a { background: var(--amber); }
-
-    .power-row { background: var(--panel2); border-top: 1px solid var(--border); padding: 12px 22px; display: flex; align-items: center; justify-content: space-between; }
-    .power-label { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 2px; }
-    .power-value { font-family: var(--font-mono); font-size: 16px; color: #e0eff8; }
-
-    .card-foot { padding: 10px 22px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid rgba(22,36,54,.8); }
-    .ts { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; }
-
-    .signal { display: flex; align-items: flex-end; gap: 2px; height: 12px; }
-    .signal span { display: block; width: 3px; border-radius: 1px; background: var(--accent); opacity: .25; }
-    .signal span.on { opacity: 1; }
-    .signal span:nth-child(1) { height: 3px; }
-    .signal span:nth-child(2) { height: 6px; }
-    .signal span:nth-child(3) { height: 9px; }
-    .signal span:nth-child(4) { height: 12px; }
-
-    /* ─── Summary ─── */
-    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-    .s-tile { background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 22px 24px; }
-    .s-label { font-size: 10px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
-    .s-value { font-family: var(--font-mono); font-size: 26px; color: #fff; }
-    .s-sub   { font-size: 11px; color: var(--muted); margin-top: 4px; letter-spacing: 1px; }
-
-    @media (max-width: 900px) { .summary { grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width: 600px) {
-      header { padding: 14px 18px; }
-      main { padding: 24px 18px 40px; }
-      .summary { grid-template-columns: 1fr; }
-      .m-value { font-size: 36px; }
-      .status-group { flex-direction: column; align-items: flex-end; gap: 5px; }
-    }
   </style>
 </head>
 <body>
 
-<header>
-  <div class="logo">
-    <div class="logo-hex">⚡</div>
-    <div class="logo-text">
-      <h1>ENERGY MONITOR</h1>
-      <p>ESP32 · FIREBASE RTDB · ASIA-SOUTHEAST1</p>
-    </div>
-  </div>
-  <div class="header-right">
-    <div class="conn-pill connecting" id="connPill">
-      <div class="conn-dot"></div>
-      <span id="connLabel">CONNECTING…</span>
-    </div>
-    <div class="clock" id="clock">--:--:--</div>
-  </div>
-</header>
-
-<main>
-  <div class="section-header">
-    <div class="section-tag">// <span>Device</span> → 3 Active Channels</div>
-    <button class="btn-global-clear" id="btn-clear-alerts" onclick="clearAllAlerts()" disabled>⚠ Cancel All Alerts</button>
-  </div>
-
-  <div class="grid">
-
-    <div class="card" id="card-1">
-      <div class="card-head">
-        <div class="device-id">
-          <div class="dev-tag">CH-01</div>
-          <div class="dev-name">Device-1</div>
-        </div>
-        <div class="status-group">
-          <button class="btn-toggle" id="btn-relay-1" onclick="toggleRelay(1)">PWR: --</button>
-          <div class="em-badge off" id="em-1">
-            <div class="em-dot"></div>
-            <span id="em-text-1">NORMAL</span>
-          </div>
-        </div>
-      </div>
-      <div class="metrics">
-        <div class="metric">
-          <div class="m-label">Voltage</div>
-          <div class="m-value v loading" id="v-1">—</div>
-          <div class="m-unit">VOLTS (V)</div>
-          <div class="m-bar-track"><div class="m-bar v" id="vbar-1" style="width:0%"></div></div>
-        </div>
-        <div class="metric">
-          <div class="m-label">Current</div>
-          <div class="m-value a loading" id="a-1">—</div>
-          <div class="m-unit">AMPERES (A)</div>
-          <div class="m-bar-track"><div class="m-bar a" id="abar-1" style="width:0%"></div></div>
-        </div>
-      </div>
-      <div class="power-row">
-        <div class="power-label">EST. POWER (V × I)</div>
-        <div class="power-value" id="p-1">— W</div>
-      </div>
-      <div class="card-foot">
-        <div class="ts" id="ts-1">Connecting to Firebase…</div>
-        <div class="signal"><span class="on"></span><span class="on"></span><span class="on"></span><span></span></div>
-      </div>
-    </div>
-
-    <div class="card" id="card-2">
-      <div class="card-head">
-        <div class="device-id">
-          <div class="dev-tag">CH-02</div>
-          <div class="dev-name">Device-2</div>
-        </div>
-        <div class="status-group">
-          <button class="btn-toggle" id="btn-relay-2" onclick="toggleRelay(2)">PWR: --</button>
-          <div class="em-badge off" id="em-2">
-            <div class="em-dot"></div>
-            <span id="em-text-2">NORMAL</span>
-          </div>
-        </div>
-      </div>
-      <div class="metrics">
-        <div class="metric">
-          <div class="m-label">Voltage</div>
-          <div class="m-value v loading" id="v-2">—</div>
-          <div class="m-unit">VOLTS (V)</div>
-          <div class="m-bar-track"><div class="m-bar v" id="vbar-2" style="width:0%"></div></div>
-        </div>
-        <div class="metric">
-          <div class="m-label">Current</div>
-          <div class="m-value a loading" id="a-2">—</div>
-          <div class="m-unit">AMPERES (A)</div>
-          <div class="m-bar-track"><div class="m-bar a" id="abar-2" style="width:0%"></div></div>
-        </div>
-      </div>
-      <div class="power-row">
-        <div class="power-label">EST. POWER (V × I)</div>
-        <div class="power-value" id="p-2">— W</div>
-      </div>
-      <div class="card-foot">
-        <div class="ts" id="ts-2">Connecting to Firebase…</div>
-        <div class="signal"><span class="on"></span><span class="on"></span><span class="on"></span><span></span></div>
-      </div>
-    </div>
-
-    <div class="card" id="card-3">
-      <div class="card-head">
-        <div class="device-id">
-          <div class="dev-tag">CH-03</div>
-          <div class="dev-name">Device-3</div>
-        </div>
-        <div class="status-group">
-          <button class="btn-toggle" id="btn-relay-3" onclick="toggleRelay(3)">PWR: --</button>
-          <div class="em-badge off" id="em-3">
-            <div class="em-dot"></div>
-            <span id="em-text-3">NORMAL</span>
-          </div>
-        </div>
-      </div>
-      <div class="metrics">
-        <div class="metric">
-          <div class="m-label">Voltage</div>
-          <div class="m-value v loading" id="v-3">—</div>
-          <div class="m-unit">VOLTS (V)</div>
-          <div class="m-bar-track"><div class="m-bar v" id="vbar-3" style="width:0%"></div></div>
-        </div>
-        <div class="metric">
-          <div class="m-label">Current</div>
-          <div class="m-value a loading" id="a-3">—</div>
-          <div class="m-unit">AMPERES (A)</div>
-          <div class="m-bar-track"><div class="m-bar a" id="abar-3" style="width:0%"></div></div>
-        </div>
-      </div>
-      <div class="power-row">
-        <div class="power-label">EST. POWER (V × I)</div>
-        <div class="power-value" id="p-3">— W</div>
-      </div>
-      <div class="card-foot">
-        <div class="ts" id="ts-3">Connecting to Firebase…</div>
-        <div class="signal"><span class="on"></span><span class="on"></span><span class="on"></span><span></span></div>
-      </div>
-    </div>
-
-  </div><div class="section-tag" style="margin-top:4px">// <span>System</span> → Summary</div>
-  <div class="summary">
-    <div class="s-tile">
-      <div class="s-label">Total Est. Power</div>
-      <div class="s-value" id="sum-power">— W</div>
-      <div class="s-sub">Σ (V × I) · all channels</div>
-    </div>
-    <div class="s-tile">
-      <div class="s-label">Avg. Voltage</div>
-      <div class="s-value" id="sum-volt" style="color:var(--accent)">— V</div>
-      <div class="s-sub">Across 3 channels</div>
-    </div>
-    <div class="s-tile">
-      <div class="s-label">Avg. Current</div>
-      <div class="s-value" id="sum-amp" style="color:var(--amber)">— A</div>
-      <div class="s-sub">Across 3 channels</div>
-    </div>
-    <div class="s-tile">
-      <div class="s-label">Active Emergencies</div>
-      <div class="s-value" id="sum-em" style="color:var(--safe)">0</div>
-      <div class="s-sub">Channels in alert state</div>
-    </div>
-  </div>
-</main>
-
-<script>
-  // Be sure your API key here is correct!
-  const FIREBASE_CONFIG = {
-    apiKey:      "AIzaSyCRmRyXQjNDPPTSjPjCTQcanGm183rW9dw", 
-    databaseURL: "https://energy-monitoring-and-safety-default-rtdb.asia-southeast1.firebasedatabase.app",
-  };
-
-  /* DB node paths */
-  const DEVICES = [
-    { key: 'Device-1', num: 1, vField: 'Voltage1', aField: 'Current1', emField: 'Emergency1', rField: 'isOn' },
-    { key: 'Device-2', num: 2, vField: 'Voltage2', aField: 'Current2', emField: 'Emergency2', rField: 'isOn' },
-    { key: 'Device-3', num: 3, vField: 'Voltage3', aField: 'Current3', emField: 'Emergency3', rField: 'isOn' },
-  ];
-
-  const V_MAX = 260; 
-  const A_MAX = 20;  
-
-  let currentRelayStates = { 1: false, 2: false, 3: false };
+  <h1>Energy Monitoring Dashboard</h1>
   
-  // Heartbeat tracking variables
-  let dbConnected = false;
-  let espOnline = false;
-  let heartbeatTimer = null;
+  <div id="status-banner">Checking ESP32 Status...</div>
 
-  setInterval(() => {
-    document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
-  }, 1000);
+  <div id="global-alert">
+    <span>⚠️ OVERLOAD DETECTED! Power cut to prevent damage.</span>
+    <button class="btn-cancel" onclick="cancelAlerts()">Reset Alerts</button>
+  </div>
 
-  window.addEventListener('DOMContentLoaded', () => {
-    try {
-      firebase.initializeApp(FIREBASE_CONFIG);
-      startListeners();
-    } catch (e) {
-      setConnPill('offline', 'ERROR');
-      console.error('Firebase init failed:', e);
-    }
-  });
+  <div class="dashboard">
+    <div class="card" id="card1">
+      <h3>Device 1</h3>
+      <div class="readings">
+        <p>Voltage: <span id="volt1">--</span> V</p>
+        <p>Current: <span id="amp1">--</span> A</p>
+        <p>Power: <span id="power1">--</span> W</p>
+        <p>Energy: <span id="enCon1">--</span> kWh</p>
+      </div>
+      <button class="btn-relay" id="btn1" onclick="toggleRelay(1)">Loading...</button>
+    </div>
 
-  function setConnPill(state, label) {
-    const pill = document.getElementById('connPill');
-    const lbl  = document.getElementById('connLabel');
-    pill.className = 'conn-pill ' + state;
-    lbl.textContent = label;
-  }
+    <div class="card" id="card2">
+      <h3>Device 2</h3>
+      <div class="readings">
+        <p>Voltage: <span id="volt2">--</span> V</p>
+        <p>Current: <span id="amp2">--</span> A</p>
+        <p>Power: <span id="power2">--</span> W</p>
+        <p>Energy: <span id="enCon2">--</span> kWh</p>
+      </div>
+      <button class="btn-relay" id="btn2" onclick="toggleRelay(2)">Loading...</button>
+    </div>
 
-  function updateConnectionUI() {
-    if (!dbConnected) {
-      setConnPill('connecting', 'DB DISCONNECTED');
-      setAllDashboardsOffline();
-    } else if (!espOnline) {
-      setConnPill('offline', 'ESP OFFLINE');
-      setAllDashboardsOffline();
-    } else {
-      setConnPill('live', 'ESP LIVE');
-    }
-  }
+    <div class="card" id="card3">
+      <h3>Device 3</h3>
+      <div class="readings">
+        <p>Voltage: <span id="volt3">--</span> V</p>
+        <p>Current: <span id="amp3">--</span> A</p>
+        <p>Power: <span id="power3">--</span> W</p>
+        <p>Energy: <span id="enCon3">--</span> kWh</p>
+      </div>
+      <button class="btn-relay" id="btn3" onclick="toggleRelay(3)">Loading...</button>
+    </div>
+  </div>
 
-  // Set everything to "--" when disconnected
-  function setAllDashboardsOffline() {
-    for (let n = 1; n <= 3; n++) {
-      document.getElementById(`v-${n}`).textContent = '--';
-      document.getElementById(`a-${n}`).textContent = '--';
-      document.getElementById(`p-${n}`).textContent = '-- W';
-      document.getElementById(`vbar-${n}`).style.width = '0%';
-      document.getElementById(`abar-${n}`).style.width = '0%';
+  <script>
+    // ==========================================
+    // 1. FIREBASE CONFIGURATION
+    // ==========================================
+    // REPLACE THIS WITH YOUR ACTUAL FIREBASE CONFIG
+    const firebaseConfig = {
+      apiKey: "AIzaSyCRmRyXQjNDPPTSjPjCTQcanGm183rW9dw",
+      databaseURL: "https://energy-monitoring-and-safety-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "energy-monitoring-and-safety",
+      // add appId, storageBucket, etc. if provided by Firebase console
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Variables for State Tracking
+    let deviceStates = {
+      1: { isOn: false },
+      2: { isOn: false },
+      3: { isOn: false }
+    };
+
+    let lastHeartbeatTime = Date.now();
+    let isESPOnline = false;
+
+    // ==========================================
+    // 2. FETCH DATA IN REAL-TIME
+    // ==========================================
+    const dbRef = db.ref('Device');
+
+    dbRef.on('value', (snapshot) => {
+      const data = snapshot.val();
+      if (!data) return;
+
+      // --- Heartbeat Logic ---
+      if (data.heartbeat !== undefined) {
+        lastHeartbeatTime = Date.now();
+        updateESPStatus(true);
+      }
+
+      let isAnyEmergency = false;
+
+      // --- Device 1 ---
+      if (data['Device-1']) {
+        const d1 = data['Device-1'];
+        updateUI(1, d1.Voltage1, d1.Current1, d1.power1, d1.enCon1);
+        updateRelayButton(1, d1.isOn);
+        if (checkEmergency(1, d1.Emergency1)) isAnyEmergency = true;
+      }
+
+      // --- Device 2 ---
+      if (data['Device-2']) {
+        const d2 = data['Device-2'];
+        updateUI(2, d2.Voltage2, d2.Current2, d2.power2, d2.enCon2);
+        updateRelayButton(2, d2.isOn);
+        if (checkEmergency(2, d2.Emergency2)) isAnyEmergency = true;
+      }
+
+      // --- Device 3 ---
+      if (data['Device-3']) {
+        const d3 = data['Device-3'];
+        updateUI(3, d3.Voltage3, d3.Current3, d3.power3, d3.enCon3);
+        updateRelayButton(3, d3.isOn);
+        if (checkEmergency(3, d3.Emergency3)) isAnyEmergency = true;
+      }
+
+      // Show or hide global alert banner
+      document.getElementById('global-alert').style.display = isAnyEmergency ? 'flex' : 'none';
+    });
+
+    // ==========================================
+    // 3. UI UPDATE HELPER FUNCTIONS
+    // ==========================================
+    function updateUI(devNum, v, i, p, e) {
+      document.getElementById(`volt${devNum}`).innerText = (v !== "" && v !== undefined) ? v : "--";
+      document.getElementById(`amp${devNum}`).innerText  = (i !== "" && i !== undefined) ? i : "--";
+      document.getElementById(`power${devNum}`).innerText = (p !== "" && p !== undefined) ? p : "--";
       
-      const ts = document.getElementById(`ts-${n}`);
-      ts.textContent = 'DEVICE DISCONNECTED';
-      ts.style.color = 'var(--danger)';
-    }
-    document.getElementById('sum-power').textContent = '-- W';
-    document.getElementById('sum-volt').textContent = '-- V';
-    document.getElementById('sum-amp').textContent = '-- A';
-    document.getElementById('sum-em').textContent = '--';
-    document.getElementById('sum-em').style.color = 'var(--muted)';
-  }
-
-  function startListeners() {
-    const db = firebase.database();
-
-    // 1. Watch Browser-to-Firebase connection
-    db.ref('.info/connected').on('value', snap => {
-      dbConnected = snap.val();
-      updateConnectionUI();
-    });
-
-    // 2. Watch ESP32 Heartbeat (Updated Path: Device/heartbeat)
-    db.ref('Device/heartbeat').on('value', snap => {
-      if (!dbConnected) return;
-
-      // ESP just checked in
-      espOnline = true;
-      updateConnectionUI();
-
-      // Clear the old timer and start a new 4-second countdown
-      clearTimeout(heartbeatTimer);
-      heartbeatTimer = setTimeout(() => {
-        espOnline = false;
-        updateConnectionUI();
-      }, 4000);
-    });
-
-    // 3. Watch Device Data
-    DEVICES.forEach(dev => {
-      db.ref(`Device/${dev.key}`).on('value', snap => {
-        if (!espOnline) return; 
-
-        const data = snap.val();
-        if (!data) return;
-
-        // Parse Float will turn empty strings ("") into NaN, which safely falls back to || 0
-        const v  = parseFloat(data[dev.vField]) || 0;
-        const a  = parseFloat(data[dev.aField]) || 0;
-        const em = parseBool(data[dev.emField]);
-        const r  = parseBool(data[dev.rField]); 
-
-        currentRelayStates[dev.num] = r;
-
-        renderCard(dev.num, v, a, em, r);
-        renderSummary();
-      });
-    });
-  }
-
-  function parseBool(val) {
-    if (val == null || val === "") return false;
-    if (typeof val === 'boolean') return val;
-    const s = String(val).toLowerCase().trim();
-    return s === '1' || s === 'true' || s === 'yes' || s === 'on';
-  }
-
-  function renderCard(n, v, a, em, relayOn) {
-    const vEl = document.getElementById(`v-${n}`);
-    const aEl = document.getElementById(`a-${n}`);
-    const btn = document.getElementById(`btn-relay-${n}`);
-    const tsEl = document.getElementById(`ts-${n}`);
-
-    vEl.classList.remove('loading');
-    aEl.classList.remove('loading');
-
-    vEl.textContent = v.toFixed(1);
-    aEl.textContent = a.toFixed(2);
-
-    document.getElementById(`vbar-${n}`).style.width = Math.min(100, (v / V_MAX) * 100).toFixed(1) + '%';
-    document.getElementById(`abar-${n}`).style.width = Math.min(100, (a / A_MAX) * 100).toFixed(1) + '%';
-
-    const pw = v * a;
-    document.getElementById(`p-${n}`).textContent = pw.toFixed(1) + ' W';
-
-    const badge = document.getElementById(`em-${n}`);
-    const card  = document.getElementById(`card-${n}`);
-    const txt   = document.getElementById(`em-text-${n}`);
-
-    if (em) {
-      badge.className = 'em-badge on';
-      txt.textContent = 'EMERGENCY';
-      card.classList.add('em-on');
-    } else {
-      badge.className = 'em-badge off';
-      txt.textContent = 'NORMAL';
-      card.classList.remove('em-on');
+      if (e !== "" && e !== undefined) {
+        document.getElementById(`enCon${devNum}`).innerText = parseFloat(e).toFixed(3);
+      } else {
+        document.getElementById(`enCon${devNum}`).innerText = "--";
+      }
     }
 
-    if (relayOn) {
-      btn.className = 'btn-toggle pwr-on';
-      btn.textContent = 'PWR: ON';
-    } else {
-      btn.className = 'btn-toggle pwr-off';
-      btn.textContent = 'PWR: OFF';
+    function updateRelayButton(devNum, isOn) {
+      deviceStates[devNum].isOn = isOn;
+      const btn = document.getElementById(`btn${devNum}`);
+      if (isOn === true || isOn === "true") {
+        btn.innerText = "Relay: ON";
+        btn.className = "btn-relay on";
+      } else {
+        btn.innerText = "Relay: OFF";
+        btn.className = "btn-relay";
+      }
     }
 
-    tsEl.textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', { hour12: false });
-    tsEl.style.color = 'var(--muted)';
-  }
-
-  function renderSummary() {
-    let totalPow = 0, totalV = 0, totalA = 0, emCount = 0, active = 0;
-
-    for (let n = 1; n <= 3; n++) {
-      const vEl = document.getElementById(`v-${n}`);
-      if (!vEl || vEl.textContent === '--') continue;
-
-      const v = parseFloat(vEl.textContent) || 0;
-      const a = parseFloat(document.getElementById(`a-${n}`).textContent) || 0;
-      totalPow += v * a;
-      totalV   += v;
-      totalA   += a;
-      active++;
-
-      if (document.getElementById(`card-${n}`).classList.contains('em-on')) emCount++;
+    function checkEmergency(devNum, emergencyStatus) {
+      const card = document.getElementById(`card${devNum}`);
+      // Check if emergency is true (boolean) or "true" (string)
+      if (emergencyStatus === true || emergencyStatus === "true") {
+        card.classList.add('emergency');
+        return true;
+      } else {
+        card.classList.remove('emergency');
+        return false;
+      }
     }
 
-    document.getElementById('sum-power').textContent = active ? totalPow.toFixed(1) + ' W' : '0.0 W';
-    document.getElementById('sum-volt').textContent  = active ? (totalV / active).toFixed(1) + ' V' : '0.0 V';
-    document.getElementById('sum-amp').textContent   = active ? (totalA / active).toFixed(2) + ' A' : '0.00 A';
-
-    const emEl = document.getElementById('sum-em');
-    emEl.textContent = emCount;
-    emEl.style.color = emCount > 0 ? 'var(--danger)' : 'var(--safe)';
-
-    const clearBtn = document.getElementById('btn-clear-alerts');
-    clearBtn.disabled = (emCount === 0);
-  }
-
-  function toggleRelay(n) {
-    if (!espOnline) {
-      alert("Cannot toggle relay. ESP32 is offline.");
-      return;
-    }
-    
-    const db = firebase.database();
-    const dev = DEVICES.find(d => d.num === n);
-    if (!dev) return;
-
-    const newState = !currentRelayStates[n]; 
-    let updates = {};
-    updates[`Device/${dev.key}/${dev.rField}`] = newState;
-
-    db.ref().update(updates).catch(error => {
-      console.error("Error updating relay:", error);
-      alert("Failed to toggle device. Check connection.");
-    });
-  }
-
-  function clearAllAlerts() {
-    if (!espOnline) {
-      alert("Cannot clear alerts. ESP32 is offline.");
-      return;
+    // ==========================================
+    // 4. USER ACTIONS (BUTTON CLICKS)
+    // ==========================================
+    function toggleRelay(devNum) {
+      if (!isESPOnline) {
+        alert("Cannot toggle relay. ESP32 is currently offline.");
+        return;
+      }
+      // Toggle the local state and push to Firebase
+      const newState = !deviceStates[devNum].isOn;
+      db.ref(`Device/Device-${devNum}/isOn`).set(newState)
+        .catch(error => console.error("Error updating relay:", error));
     }
 
-    const db = firebase.database();
-    let updates = {};
+    function cancelAlerts() {
+      // Clear emergency flags in Firebase for all devices
+      db.ref('Device/Device-1/Emergency1').set("");
+      db.ref('Device/Device-2/Emergency2').set("");
+      db.ref('Device/Device-3/Emergency3').set("");
+    }
 
-    DEVICES.forEach(dev => {
-      updates[`Device/${dev.key}/${dev.emField}`] = false;
-      updates[`Device/${dev.key}/${dev.rField}`] = true; 
-    });
+    // ==========================================
+    // 5. HEARTBEAT WATCHDOG
+    // ==========================================
+    function updateESPStatus(online) {
+      isESPOnline = online;
+      const banner = document.getElementById('status-banner');
+      if (online) {
+        banner.innerText = "ESP32 Status: ONLINE";
+        banner.style.backgroundColor = "var(--success)";
+      } else {
+        banner.innerText = "ESP32 Status: OFFLINE (Check Power/WiFi)";
+        banner.style.backgroundColor = "var(--offline)";
+        
+        // Blank out the sensor readings when offline to prevent confusion
+        for(let i=1; i<=3; i++) {
+          updateUI(i, "--", "--", "--", "--");
+        }
+      }
+    }
 
-    db.ref().update(updates).then(() => {
-      console.log("All alerts cleared.");
-    }).catch(error => {
-      console.error("Error clearing alerts:", error);
-    });
-  }
-</script>
+    // Check every 1 second if the last heartbeat is older than 4 seconds
+    setInterval(() => {
+      if (Date.now() - lastHeartbeatTime > 4000) {
+        updateESPStatus(false);
+      }
+    }, 1000);
+
+  </script>
 </body>
 </html>
