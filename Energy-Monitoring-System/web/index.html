@@ -243,8 +243,10 @@
     .m-bar.a { background: var(--amber); }
 
     .power-row { background: var(--panel2); border-top: 1px solid var(--border); padding: 12px 22px; display: flex; align-items: center; justify-content: space-between; }
+    .power-row.alt { background: var(--panel); }
     .power-label { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 2px; }
     .power-value { font-family: var(--font-mono); font-size: 16px; color: #e0eff8; }
+    .power-value.safe { color: var(--safe); }
 
     .card-foot { padding: 10px 22px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid rgba(22,36,54,.8); }
     .ts { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; }
@@ -330,8 +332,12 @@
         </div>
       </div>
       <div class="power-row">
-        <div class="power-label">EST. POWER (V × I)</div>
+        <div class="power-label">REAL POWER (W)</div>
         <div class="power-value" id="p-1">— W</div>
+      </div>
+      <div class="power-row alt">
+        <div class="power-label">ENERGY (kWh)</div>
+        <div class="power-value safe" id="e-1">— kWh</div>
       </div>
       <div class="card-foot">
         <div class="ts" id="ts-1">Connecting to Firebase…</div>
@@ -368,8 +374,12 @@
         </div>
       </div>
       <div class="power-row">
-        <div class="power-label">EST. POWER (V × I)</div>
+        <div class="power-label">REAL POWER (W)</div>
         <div class="power-value" id="p-2">— W</div>
+      </div>
+      <div class="power-row alt">
+        <div class="power-label">ENERGY (kWh)</div>
+        <div class="power-value safe" id="e-2">— kWh</div>
       </div>
       <div class="card-foot">
         <div class="ts" id="ts-2">Connecting to Firebase…</div>
@@ -406,8 +416,12 @@
         </div>
       </div>
       <div class="power-row">
-        <div class="power-label">EST. POWER (V × I)</div>
+        <div class="power-label">REAL POWER (W)</div>
         <div class="power-value" id="p-3">— W</div>
+      </div>
+      <div class="power-row alt">
+        <div class="power-label">ENERGY (kWh)</div>
+        <div class="power-value safe" id="e-3">— kWh</div>
       </div>
       <div class="card-foot">
         <div class="ts" id="ts-3">Connecting to Firebase…</div>
@@ -418,9 +432,14 @@
   </div><div class="section-tag" style="margin-top:4px">// <span>System</span> → Summary</div>
   <div class="summary">
     <div class="s-tile">
-      <div class="s-label">Total Est. Power</div>
+      <div class="s-label">Total Real Power</div>
       <div class="s-value" id="sum-power">— W</div>
-      <div class="s-sub">Σ (V × I) · all channels</div>
+      <div class="s-sub">Σ (Watts) · all channels</div>
+    </div>
+    <div class="s-tile">
+      <div class="s-label">Total Energy</div>
+      <div class="s-value" id="sum-energy" style="color:var(--safe)">— kWh</div>
+      <div class="s-sub">Σ (kWh) · all channels</div>
     </div>
     <div class="s-tile">
       <div class="s-label">Avg. Voltage</div>
@@ -428,13 +447,8 @@
       <div class="s-sub">Across 3 channels</div>
     </div>
     <div class="s-tile">
-      <div class="s-label">Avg. Current</div>
-      <div class="s-value" id="sum-amp" style="color:var(--amber)">— A</div>
-      <div class="s-sub">Across 3 channels</div>
-    </div>
-    <div class="s-tile">
       <div class="s-label">Active Emergencies</div>
-      <div class="s-value" id="sum-em" style="color:var(--safe)">0</div>
+      <div class="s-value" id="sum-em" style="color:var(--danger)">0</div>
       <div class="s-sub">Channels in alert state</div>
     </div>
   </div>
@@ -449,9 +463,9 @@
 
   /* DB node paths */
   const DEVICES = [
-    { key: 'Device-1', num: 1, vField: 'Voltage1', aField: 'Current1', emField: 'Emergency1', rField: 'isOn' },
-    { key: 'Device-2', num: 2, vField: 'Voltage2', aField: 'Current2', emField: 'Emergency2', rField: 'isOn' },
-    { key: 'Device-3', num: 3, vField: 'Voltage3', aField: 'Current3', emField: 'Emergency3', rField: 'isOn' },
+    { key: 'Device-1', num: 1, vField: 'Voltage1', aField: 'Current1', pField: 'power1', eField: 'enCon1', emField: 'Emergency1', rField: 'isOn' },
+    { key: 'Device-2', num: 2, vField: 'Voltage2', aField: 'Current2', pField: 'power2', eField: 'enCon2', emField: 'Emergency2', rField: 'isOn' },
+    { key: 'Device-3', num: 3, vField: 'Voltage3', aField: 'Current3', pField: 'power3', eField: 'enCon3', emField: 'Emergency3', rField: 'isOn' },
   ];
 
   const V_MAX = 260; 
@@ -503,6 +517,7 @@
       document.getElementById(`v-${n}`).textContent = '--';
       document.getElementById(`a-${n}`).textContent = '--';
       document.getElementById(`p-${n}`).textContent = '-- W';
+      document.getElementById(`e-${n}`).textContent = '-- kWh';
       document.getElementById(`vbar-${n}`).style.width = '0%';
       document.getElementById(`abar-${n}`).style.width = '0%';
       
@@ -511,8 +526,8 @@
       ts.style.color = 'var(--danger)';
     }
     document.getElementById('sum-power').textContent = '-- W';
+    document.getElementById('sum-energy').textContent = '-- kWh';
     document.getElementById('sum-volt').textContent = '-- V';
-    document.getElementById('sum-amp').textContent = '-- A';
     document.getElementById('sum-em').textContent = '--';
     document.getElementById('sum-em').style.color = 'var(--muted)';
   }
@@ -526,7 +541,7 @@
       updateConnectionUI();
     });
 
-    // 2. Watch ESP32 Heartbeat (Updated Path: Device/heartbeat)
+    // 2. Watch ESP32 Heartbeat 
     db.ref('Device/heartbeat').on('value', snap => {
       if (!dbConnected) return;
 
@@ -553,12 +568,14 @@
         // Parse Float will turn empty strings ("") into NaN, which safely falls back to || 0
         const v  = parseFloat(data[dev.vField]) || 0;
         const a  = parseFloat(data[dev.aField]) || 0;
+        const p  = parseFloat(data[dev.pField]) || 0;
+        const e  = parseFloat(data[dev.eField]) || 0;
         const em = parseBool(data[dev.emField]);
         const r  = parseBool(data[dev.rField]); 
 
         currentRelayStates[dev.num] = r;
 
-        renderCard(dev.num, v, a, em, r);
+        renderCard(dev.num, v, a, p, e, em, r);
         renderSummary();
       });
     });
@@ -571,7 +588,7 @@
     return s === '1' || s === 'true' || s === 'yes' || s === 'on';
   }
 
-  function renderCard(n, v, a, em, relayOn) {
+  function renderCard(n, v, a, p, e, em, relayOn) {
     const vEl = document.getElementById(`v-${n}`);
     const aEl = document.getElementById(`a-${n}`);
     const btn = document.getElementById(`btn-relay-${n}`);
@@ -586,8 +603,9 @@
     document.getElementById(`vbar-${n}`).style.width = Math.min(100, (v / V_MAX) * 100).toFixed(1) + '%';
     document.getElementById(`abar-${n}`).style.width = Math.min(100, (a / A_MAX) * 100).toFixed(1) + '%';
 
-    const pw = v * a;
-    document.getElementById(`p-${n}`).textContent = pw.toFixed(1) + ' W';
+    // Populate actual DB Power and Energy
+    document.getElementById(`p-${n}`).textContent = p.toFixed(1) + ' W';
+    document.getElementById(`e-${n}`).textContent = e.toFixed(3) + ' kWh';
 
     const badge = document.getElementById(`em-${n}`);
     const card  = document.getElementById(`card-${n}`);
@@ -616,25 +634,27 @@
   }
 
   function renderSummary() {
-    let totalPow = 0, totalV = 0, totalA = 0, emCount = 0, active = 0;
+    let totalPow = 0, totalE = 0, totalV = 0, emCount = 0, active = 0;
 
     for (let n = 1; n <= 3; n++) {
       const vEl = document.getElementById(`v-${n}`);
       if (!vEl || vEl.textContent === '--') continue;
 
       const v = parseFloat(vEl.textContent) || 0;
-      const a = parseFloat(document.getElementById(`a-${n}`).textContent) || 0;
-      totalPow += v * a;
+      const p = parseFloat(document.getElementById(`p-${n}`).textContent) || 0;
+      const e = parseFloat(document.getElementById(`e-${n}`).textContent) || 0;
+      
+      totalPow += p;
+      totalE   += e;
       totalV   += v;
-      totalA   += a;
       active++;
 
       if (document.getElementById(`card-${n}`).classList.contains('em-on')) emCount++;
     }
 
-    document.getElementById('sum-power').textContent = active ? totalPow.toFixed(1) + ' W' : '0.0 W';
-    document.getElementById('sum-volt').textContent  = active ? (totalV / active).toFixed(1) + ' V' : '0.0 V';
-    document.getElementById('sum-amp').textContent   = active ? (totalA / active).toFixed(2) + ' A' : '0.00 A';
+    document.getElementById('sum-power').textContent  = active ? totalPow.toFixed(1) + ' W' : '0.0 W';
+    document.getElementById('sum-energy').textContent = active ? totalE.toFixed(3) + ' kWh' : '0.000 kWh';
+    document.getElementById('sum-volt').textContent   = active ? (totalV / active).toFixed(1) + ' V' : '0.0 V';
 
     const emEl = document.getElementById('sum-em');
     emEl.textContent = emCount;
